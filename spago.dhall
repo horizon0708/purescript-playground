@@ -12,6 +12,7 @@ You can edit this file as you like.
   , "ordered-collections"
   , "psci-support"
   , "test-unit"
+  , "transformers"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

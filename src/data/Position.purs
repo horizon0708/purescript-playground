@@ -12,22 +12,27 @@ import Data.Newtype (overF)
 import Math (abs)
 
 type Position = Tuple Int Int  
-type RelativePosition = Tuple Int Int
-type Piece = { position :: Position }
 
+-- this feels like a monad? need to lift and unlift
+newtype RelativePosition = RelativePosition (Tuple Int Int)
+derive newtype instance eqRelPos :: Eq RelativePosition
+derive newtype instance showRelPos :: Show RelativePosition
+derive newtype instance ordRelPos :: Ord RelativePosition
+
+toRelative :: Position -> Position -> RelativePosition
+toRelative offset pos = RelativePosition (pos - offset)
+
+toAbsolute :: Position -> RelativePosition -> Position
+toAbsolute offset (RelativePosition pos) = pos + offset
+
+toTuple :: RelativePosition -> Tuple Int Int
+toTuple (RelativePosition pos) = pos
 
 inRange :: Int -> Boolean
 inRange n = n > 0 && n < 9
 
 inBound :: Tuple Int Int -> Boolean
 inBound (Tuple x y) = inRange x && inRange y   
-
--- given a piece
--- a piece can only move to a certain square
-data ChessPiece = 
-    Knight Piece |
-    Queen Piece |
-    Rook Piece
 
 data ChessDirection =
     UpDiagonal |
@@ -46,11 +51,6 @@ data MovementDirection =
   UpLeft 
 
 type Range = Int
-
--- to relative pos
-toRelativePositions :: Tuple Int Int -> Array(Tuple Int Int) -> Array (Tuple Int Int)
-toRelativePositions offset = map (\origin -> origin - offset)
-
 type PiecesInDirection = Array (RelativePosition)
 
 toPredicate :: MovementDirection -> Tuple Int Int -> Boolean
@@ -74,7 +74,9 @@ toNormalized Left = Tuple (-1) 0
 toNormalized UpLeft = Tuple (-1) 1
 
 filterByDirection :: MovementDirection -> Array (RelativePosition) -> PiecesInDirection
-filterByDirection direction = filter (toPredicate direction)
+filterByDirection direction = filter toPredicate' where
+    toPredicate' :: RelativePosition -> Boolean
+    toPredicate' pos = toPredicate direction (toTuple pos)  
 
 absInt :: Int -> Int
 absInt n | n < 0 = n * -1
@@ -97,24 +99,22 @@ sortByDistance a b | absTuple a < absTuple b = LT
 sortByDistance _ _ = EQ
 
 closestOtherPiece :: PiecesInDirection -> Maybe RelativePosition
-closestOtherPiece arr = head $ sortBy sortByDistance arr 
+closestOtherPiece arr = head $ sortBy sortByDistance' arr 
+  where sortByDistance' a b = sortByDistance (toTuple a) (toTuple b)
 
 test = [ Tuple 2 2, Tuple 4 4 , Tuple (-3) (-3) ]
 testBoard = [ Tuple 2 2 ]
 testBoard2 = []
-
-testFn :: RelativePosition -> RelativePosition
-testFn r = r
 
 lineMovement ::Array(RelativePosition) ->Int -> MovementDirection ->  Array (RelativePosition)
 lineMovement o n direction = do
   x <- 0 .. (n * gx)
   y <- 0 .. (n * gy)
   guard $ (getDistance (Tuple x y)) < distance && toPredicate direction (Tuple x y)
-  pure (Tuple x y) where
+  pure (RelativePosition (Tuple x y)) where
     Tuple gx gy = toNormalized direction 
     distance = case closestOtherPiece (filterByDirection direction o) of
-      Just t-> getDistance t
+      Just t-> getDistance (toTuple t)
       _ -> n 
 
 combineLineMovements :: Int ->  Array(MovementDirection)-> Array(RelativePosition) -> Array(RelativePosition)
@@ -140,76 +140,4 @@ bishopMovement :: Array(RelativePosition) -> Array(RelativePosition)
 bishopMovement = combineLineMovements 8 [
   UpRight , DownRight , DownLeft, UpLeft 
 ]
-
--- how do i tell it to stop once it finds enemy?
-
--- lineMovement :: MovementDirection -> Int -> Array(RelativePosition) -> Array (RelativePosition) 
--- lineMovement Up range other = do
---   x <- [0..range]
---   y <- [0..range]
---   pure (Tuple x y)
-
--- lineMovement gradient range other = do 
---     x <- [-xMin .. xMax]
---     y <- [-range .. range]
---     pure (Tuple x y)
---     where 
---       o = filterByGradient gradient other
---       xArr = cons range (map fst o)
---       xMax = max xArr
---       xMin = min xArr 
-
--- pieceMovement :: ChessPiece -> Array(Tuple Int Int) -> Array (Tuple Int Int)
--- pieceMovement (Knight { position: Tuple x y}) _ = do
---   x2 <- [ x + 1, x + 2, x - 1, x -2]
---   y2 <- [ y + 1, y + 2, y - 1, y -2]
---   guard $ x2 /= y2
---   guard $ x2 * -1 /= y2
---   pure (Tuple x2 y2)
--- pieceMovement (Queen { position: Tuple x y}) board = do
---   x2 <- (map \n -> n + x) [-7..7]
---   y2 <- (map \n -> n + y) [-7..7]
---   pure (Tuple x2 y2)
-
--- if the square is not within the piece Movement ...
-
--- filterOutOfBound :: Array (Tuple Int Int) -> Array(Tuple Int Int)  
--- filterOutOfBound = filter inBound
-
-
-
-
--- isInMoveSet :: ChessPiece -> Position -> Maybe ChessPiece
--- isInMoveSet p = do
---   _ <- find (\x -> x == p.position) (pieceMovement p)
---   pure (Just p)
-
-
-c1 :: ChessPiece
-c1 = Knight { position : Tuple 0 0}
-
-showChessPiece :: ChessPiece -> String
-showChessPiece (Knight { position: (Tuple x y)}) = "Knight at " <> show x <> ", " <> show y <> "."
-showChessPiece (Queen { position: (Tuple x y)}) = "Queen at " <> show x <> ", " <> show y <> "."
-showChessPiece (Rook { position: (Tuple x y)}) = "Rook at " <> show x <> ", " <> show y <> "."
-
-instance showChessPieceInstance :: Show ChessPiece where
-  show = showChessPiece
-
-
-
--- movePiece :: ChessPiece -> Position -> Maybe ChessPiece
--- movePiece (Knight piece) position = do
-
-
---   pure $ Knight piece
-
-
-
-
--- the piece can only go to designated squares
--- the piece cannot move past other pieces (unless its a knight)
--- the piece cannot move to a square occupied by a friendly piece   
--- the move must not must not be put king into check
-
 
